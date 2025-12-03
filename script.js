@@ -201,11 +201,16 @@ function drawWaveform() {
 }
 
 // Playback Controls
-function playAudio() {
+async function playAudio() {
     if (!state.audioBuffer) return;
     
     if (state.isPlaying) {
         stopAudio();
+    }
+    
+    // Resume AudioContext if needed (required by some browsers)
+    if (state.audioContext.state === 'suspended') {
+        await state.audioContext.resume();
     }
     
     state.sourceNode = state.audioContext.createBufferSource();
@@ -367,9 +372,21 @@ async function combineAudioFiles() {
     
     stopAudio();
     
+    // Validate sample rates match
+    const sampleRate = state.audioFiles[0].buffer.sampleRate;
+    const differentSampleRate = state.audioFiles.find(
+        audioData => audioData.buffer.sampleRate !== sampleRate
+    );
+    
+    if (differentSampleRate) {
+        alert(`❌ ERROR: Cannot combine files with different sample rates.\n` +
+              `File "${differentSampleRate.name}" has ${differentSampleRate.buffer.sampleRate}Hz ` +
+              `while others have ${sampleRate}Hz.`);
+        return;
+    }
+    
     // Calculate total length
     let totalLength = 0;
-    const sampleRate = state.audioFiles[0].buffer.sampleRate;
     let maxChannels = 1;
     
     for (const audioData of state.audioFiles) {
