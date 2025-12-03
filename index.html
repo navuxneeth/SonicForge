@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SonicForge - Retro Audio Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">🎵 SONICFORGE 🎵</h1>
+            <p class="subtitle">[ RETRO AUDIO EDITOR v1.0 ]</p>
+        </header>
+
+        <main class="main-content">
+            <!-- File Upload Section -->
+            <section class="section">
+                <h2 class="section-title">[ LOAD AUDIO FILES ]</h2>
+                <div class="upload-area">
+                    <input type="file" id="fileInput" accept="audio/*" multiple class="file-input">
+                    <label for="fileInput" class="upload-label">
+                        <span class="upload-icon">📁</span>
+                        <span>CLICK TO UPLOAD AUDIO FILES</span>
+                        <span class="upload-hint">(MP3, AAC, WAV, OGG, etc.)</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Audio Files List -->
+            <section class="section" id="filesSection" style="display: none;">
+                <h2 class="section-title">[ LOADED FILES ]</h2>
+                <div id="filesList" class="files-list"></div>
+            </section>
+
+            <!-- Audio Editor Controls -->
+            <section class="section" id="editorSection" style="display: none;">
+                <h2 class="section-title">[ AUDIO EDITOR ]</h2>
+                
+                <div class="selected-file-info" id="selectedFileInfo"></div>
+                
+                <!-- Waveform Visualization -->
+                <div class="waveform-container">
+                    <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+                    <div class="trim-controls" id="trimControls">
+                        <div class="trim-handle trim-start" id="trimStart"></div>
+                        <div class="trim-handle trim-end" id="trimEnd"></div>
+                    </div>
+                </div>
+
+                <!-- Playback Controls -->
+                <div class="playback-controls">
+                    <button class="btn" id="playBtn">▶ PLAY</button>
+                    <button class="btn" id="pauseBtn">⏸ PAUSE</button>
+                    <button class="btn" id="stopBtn">⏹ STOP</button>
+                    <div class="time-display">
+                        <span id="currentTime">00:00</span> / <span id="totalTime">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Edit Controls -->
+                <div class="edit-controls">
+                    <div class="control-group">
+                        <label class="control-label">VOLUME:</label>
+                        <input type="range" id="volumeSlider" min="0" max="200" value="100" class="slider">
+                        <span id="volumeValue" class="control-value">100%</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">TRIM START:</label>
+                        <input type="number" id="trimStartInput" min="0" step="0.01" value="0" class="number-input">
+                        <span class="control-unit">s</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">TRIM END:</label>
+                        <input type="number" id="trimEndInput" min="0" step="0.01" value="0" class="number-input">
+                        <span class="control-unit">s</span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-action" id="reverseBtn">🔄 REVERSE</button>
+                    <button class="btn btn-action" id="applyTrimBtn">✂ APPLY TRIM</button>
+                    <button class="btn btn-action" id="downloadBtn">💾 DOWNLOAD</button>
+                </div>
+            </section>
+
+            <!-- Batch Operations -->
+            <section class="section" id="batchSection" style="display: none;">
+                <h2 class="section-title">[ BATCH OPERATIONS ]</h2>
+                <div class="batch-controls">
+                    <button class="btn btn-batch" id="combineBtn">🔗 COMBINE ALL FILES</button>
+                    <button class="btn btn-batch" id="batchDownloadBtn">💾 DOWNLOAD ALL</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>[ ALL PROCESSING DONE ON YOUR DEVICE - NO UPLOADS ]</p>
+            <p>© 2024 SONICFORGE - RETRO AUDIO EDITOR</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
