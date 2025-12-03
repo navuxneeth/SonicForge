@@ -459,5 +459,6 @@ body::before {
             rgba(0, 255, 0, 0.02) 2px
         );
     pointer-events: none;
-    z-index: 9999;
+    z-index: 1;
+    will-change: opacity;
 }

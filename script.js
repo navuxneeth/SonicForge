@@ -258,11 +258,13 @@ function stopAudio() {
 
 function updateTimeDisplay() {
     if (state.isPlaying) {
-        const currentTime = state.audioContext.currentTime - state.startTime;
-        document.getElementById('currentTime').textContent = formatTime(Math.min(currentTime, state.trimEnd));
+        const currentTime = state.audioContext.currentTime - state.startTime + state.trimStart;
+        const displayTime = Math.min(currentTime, state.trimEnd);
+        document.getElementById('currentTime').textContent = formatTime(displayTime);
         requestAnimationFrame(updateTimeDisplay);
     } else {
-        document.getElementById('currentTime').textContent = formatTime(state.pauseTime);
+        const displayTime = state.pauseTime + state.trimStart;
+        document.getElementById('currentTime').textContent = formatTime(displayTime);
     }
 }
 
@@ -482,19 +484,23 @@ function audioBufferToWav(buffer) {
     const bytesPerSample = bitDepth / 8;
     const blockAlign = numberOfChannels * bytesPerSample;
     
-    const data = [];
+    // Pre-allocate typed array for better performance
+    const numSamples = buffer.length * numberOfChannels;
+    const int16Data = new Int16Array(numSamples);
+    
+    // Convert samples more efficiently
+    let dataIndex = 0;
     for (let i = 0; i < buffer.length; i++) {
         for (let channel = 0; channel < numberOfChannels; channel++) {
             const sample = buffer.getChannelData(channel)[i];
             const clampedSample = Math.max(-1, Math.min(1, sample));
-            const intSample = clampedSample < 0 
+            int16Data[dataIndex++] = clampedSample < 0 
                 ? clampedSample * 0x8000 
                 : clampedSample * 0x7FFF;
-            data.push(intSample);
         }
     }
     
-    const dataLength = data.length * bytesPerSample;
+    const dataLength = int16Data.length * bytesPerSample;
     const buffer_size = 44 + dataLength;
     const arrayBuffer = new ArrayBuffer(buffer_size);
     const view = new DataView(arrayBuffer);
@@ -518,12 +524,9 @@ function audioBufferToWav(buffer) {
     writeString(view, 36, 'data');
     view.setUint32(40, dataLength, true);
     
-    // Write the PCM samples
-    let offset = 44;
-    for (let i = 0; i < data.length; i++) {
-        view.setInt16(offset, data[i], true);
-        offset += 2;
-    }
+    // Write the PCM samples using typed array
+    const int16View = new Int16Array(arrayBuffer, 44);
+    int16View.set(int16Data);
     
     return arrayBuffer;
 }
