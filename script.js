@@ -17,6 +17,10 @@ const state = {
     isDraggingTrimEnd: false
 };
 
+// Constants
+const TIME_PRECISION = 3; // Decimal places for time display
+const NORMALIZE_TARGET_LEVEL = 0.95; // Target level for normalization (95% to avoid clipping)
+
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
 
@@ -165,7 +169,7 @@ function selectFile(index) {
     // Update UI
     document.getElementById('trimStartInput').value = 0;
     document.getElementById('trimStartInput').max = state.audioBuffer.duration;
-    document.getElementById('trimEndInput').value = state.audioBuffer.duration.toFixed(3);
+    document.getElementById('trimEndInput').value = state.audioBuffer.duration.toFixed(TIME_PRECISION);
     document.getElementById('trimEndInput').max = state.audioBuffer.duration;
     document.getElementById('totalTime').textContent = formatTime(state.audioBuffer.duration);
     
@@ -289,11 +293,11 @@ function handleTrimDrag(event) {
     
     if (state.isDraggingTrimStart) {
         state.trimStart = Math.max(0, Math.min(time, state.trimEnd - 0.1));
-        document.getElementById('trimStartInput').value = state.trimStart.toFixed(3);
+        document.getElementById('trimStartInput').value = state.trimStart.toFixed(TIME_PRECISION);
         drawWaveform();
     } else if (state.isDraggingTrimEnd) {
         state.trimEnd = Math.min(state.audioBuffer.duration, Math.max(time, state.trimStart + 0.1));
-        document.getElementById('trimEndInput').value = state.trimEnd.toFixed(3);
+        document.getElementById('trimEndInput').value = state.trimEnd.toFixed(TIME_PRECISION);
         drawWaveform();
     }
 }
@@ -395,14 +399,14 @@ function updateVolume(event) {
 function updateTrimStart(event) {
     const value = parseFloat(event.target.value);
     state.trimStart = Math.max(0, Math.min(value, state.trimEnd - 0.1));
-    event.target.value = state.trimStart.toFixed(3);
+    event.target.value = state.trimStart.toFixed(TIME_PRECISION);
     drawWaveform();
 }
 
 function updateTrimEnd(event) {
     const value = parseFloat(event.target.value);
     state.trimEnd = Math.min(state.audioBuffer.duration, Math.max(value, state.trimStart + 0.1));
-    event.target.value = state.trimEnd.toFixed(3);
+    event.target.value = state.trimEnd.toFixed(TIME_PRECISION);
     drawWaveform();
 }
 
@@ -430,7 +434,7 @@ async function reverseAudio() {
     state.audioBuffer = reversedBuffer;
     state.currentFile.buffer = reversedBuffer;
     state.trimEnd = state.audioBuffer.duration;
-    document.getElementById('trimEndInput').value = state.trimEnd.toFixed(3);
+    document.getElementById('trimEndInput').value = state.trimEnd.toFixed(TIME_PRECISION);
     document.getElementById('totalTime').textContent = formatTime(state.audioBuffer.duration);
     
     // Update native player
@@ -474,7 +478,7 @@ async function applyTrim() {
     
     document.getElementById('trimStartInput').value = 0;
     document.getElementById('trimStartInput').max = trimmedBuffer.duration;
-    document.getElementById('trimEndInput').value = trimmedBuffer.duration.toFixed(3);
+    document.getElementById('trimEndInput').value = trimmedBuffer.duration.toFixed(TIME_PRECISION);
     document.getElementById('trimEndInput').max = trimmedBuffer.duration;
     document.getElementById('totalTime').textContent = formatTime(trimmedBuffer.duration);
     
@@ -494,7 +498,7 @@ async function splitAtCursor() {
     stopAudio();
     
     const splitTime = state.currentCursorTime;
-    if (splitTime <= 0 || splitTime >= state.audioBuffer.duration) {
+    if (splitTime < 0 || splitTime >= state.audioBuffer.duration) {
         alert('Invalid cursor position for splitting');
         return;
     }
@@ -650,7 +654,7 @@ async function normalizeAudio() {
         return;
     }
     
-    const gain = 0.95 / peak; // Normalize to 95% to avoid clipping
+    const gain = NORMALIZE_TARGET_LEVEL / peak; // Normalize to target level to avoid clipping
     
     const normalizedBuffer = state.audioContext.createBuffer(
         state.audioBuffer.numberOfChannels,
