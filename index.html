@@ -12,8 +12,9 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1 class="title">🎵 SONICFORGE 🎵</h1>
+            <h1 class="title">SONICFORGE</h1>
             <p class="subtitle">[ RETRO AUDIO EDITOR v1.0 ]</p>
+            <button class="btn btn-theme-toggle" id="themeToggle">TOGGLE THEME</button>
         </header>
 
         <main class="main-content">
@@ -23,9 +24,9 @@
                 <div class="upload-area">
                     <input type="file" id="fileInput" accept="audio/*" multiple class="file-input">
                     <label for="fileInput" class="upload-label">
-                        <span class="upload-icon">📁</span>
+                        <span class="upload-icon">[FILE]</span>
                         <span>CLICK TO UPLOAD AUDIO FILES</span>
-                        <span class="upload-hint">(MP3, AAC, WAV, OGG, etc.)</span>
+                        <span class="upload-hint">(MP3, AAC, WAV, OGG, FLAC, etc.)</span>
                     </label>
                 </div>
             </section>
@@ -48,16 +49,22 @@
                     <div class="trim-controls" id="trimControls">
                         <div class="trim-handle trim-start" id="trimStart"></div>
                         <div class="trim-handle trim-end" id="trimEnd"></div>
+                        <div class="time-cursor" id="timeCursor"></div>
                     </div>
+                </div>
+
+                <!-- Native Audio Player -->
+                <div class="native-player-container">
+                    <audio id="nativeAudioPlayer" controls class="native-player"></audio>
                 </div>
 
                 <!-- Playback Controls -->
                 <div class="playback-controls">
-                    <button class="btn" id="playBtn">▶ PLAY</button>
-                    <button class="btn" id="pauseBtn">⏸ PAUSE</button>
-                    <button class="btn" id="stopBtn">⏹ STOP</button>
+                    <button class="btn" id="playBtn">PLAY</button>
+                    <button class="btn" id="pauseBtn">PAUSE</button>
+                    <button class="btn" id="stopBtn">STOP</button>
                     <div class="time-display">
-                        <span id="currentTime">00:00</span> / <span id="totalTime">00:00</span>
+                        <span id="currentTime">00:00.000</span> / <span id="totalTime">00:00.000</span>
                     </div>
                 </div>
 
@@ -84,9 +91,13 @@
 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <button class="btn btn-action" id="reverseBtn">🔄 REVERSE</button>
-                    <button class="btn btn-action" id="applyTrimBtn">✂ APPLY TRIM</button>
-                    <button class="btn btn-action" id="downloadBtn">💾 DOWNLOAD</button>
+                    <button class="btn btn-action" id="reverseBtn">REVERSE</button>
+                    <button class="btn btn-action" id="applyTrimBtn">APPLY TRIM</button>
+                    <button class="btn btn-action" id="splitBtn">SPLIT AT CURSOR</button>
+                    <button class="btn btn-action" id="fadeInBtn">FADE IN</button>
+                    <button class="btn btn-action" id="fadeOutBtn">FADE OUT</button>
+                    <button class="btn btn-action" id="normalizeBtn">NORMALIZE</button>
+                    <button class="btn btn-action" id="downloadBtn">DOWNLOAD</button>
                 </div>
             </section>
 
@@ -94,15 +105,16 @@
             <section class="section" id="batchSection" style="display: none;">
                 <h2 class="section-title">[ BATCH OPERATIONS ]</h2>
                 <div class="batch-controls">
-                    <button class="btn btn-batch" id="combineBtn">🔗 COMBINE ALL FILES</button>
-                    <button class="btn btn-batch" id="batchDownloadBtn">💾 DOWNLOAD ALL</button>
+                    <button class="btn btn-batch" id="combineBtn">COMBINE ALL FILES</button>
+                    <button class="btn btn-batch" id="batchDownloadBtn">DOWNLOAD ALL</button>
                 </div>
             </section>
         </main>
 
         <footer class="footer">
             <p>[ ALL PROCESSING DONE ON YOUR DEVICE - NO UPLOADS ]</p>
-            <p>© 2024 SONICFORGE - RETRO AUDIO EDITOR</p>
+            <p>© 2025 SONICFORGE - RETRO AUDIO EDITOR</p>
+            <p><a href="https://github.com/navuxneeth/SonicForge" target="_blank" class="footer-link">VIEW ON GITHUB</a></p>
         </footer>
     </div>
 

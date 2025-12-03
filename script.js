@@ -11,7 +11,10 @@ const state = {
     pauseTime: 0,
     trimStart: 0,
     trimEnd: 0,
-    originalBuffer: null
+    originalBuffer: null,
+    currentCursorTime: 0,
+    isDraggingTrimStart: false,
+    isDraggingTrimEnd: false
 };
 
 // Initialize
@@ -21,6 +24,9 @@ function init() {
     // Initialize Web Audio API
     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     
+    // Set light mode by default
+    document.body.classList.add('light-mode');
+    
     // Setup event listeners
     setupEventListeners();
 }
@@ -28,6 +34,9 @@ function init() {
 function setupEventListeners() {
     // File input
     document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+    
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
     
     // Playback controls
     document.getElementById('playBtn').addEventListener('click', playAudio);
@@ -42,11 +51,43 @@ function setupEventListeners() {
     // Action buttons
     document.getElementById('reverseBtn').addEventListener('click', reverseAudio);
     document.getElementById('applyTrimBtn').addEventListener('click', applyTrim);
+    document.getElementById('splitBtn').addEventListener('click', splitAtCursor);
+    document.getElementById('fadeInBtn').addEventListener('click', applyFadeIn);
+    document.getElementById('fadeOutBtn').addEventListener('click', applyFadeOut);
+    document.getElementById('normalizeBtn').addEventListener('click', normalizeAudio);
     document.getElementById('downloadBtn').addEventListener('click', downloadAudio);
     
     // Batch operations
     document.getElementById('combineBtn').addEventListener('click', combineAudioFiles);
     document.getElementById('batchDownloadBtn').addEventListener('click', batchDownload);
+    
+    // Waveform interactions
+    const waveformCanvas = document.getElementById('waveformCanvas');
+    waveformCanvas.addEventListener('click', seekToPosition);
+    
+    // Trim handle dragging
+    const trimStart = document.getElementById('trimStart');
+    const trimEnd = document.getElementById('trimEnd');
+    
+    trimStart.addEventListener('mousedown', (e) => {
+        state.isDraggingTrimStart = true;
+        e.preventDefault();
+    });
+    
+    trimEnd.addEventListener('mousedown', (e) => {
+        state.isDraggingTrimEnd = true;
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', handleTrimDrag);
+    document.addEventListener('mouseup', () => {
+        state.isDraggingTrimStart = false;
+        state.isDraggingTrimEnd = false;
+    });
+}
+
+function toggleTheme() {
+    document.body.classList.toggle('light-mode');
 }
 
 // File Handling
@@ -97,7 +138,7 @@ function updateFilesList() {
         
         fileItem.innerHTML = `
             <div class="file-info">
-                <span class="file-name">🎵 ${audioData.name}</span>
+                <span class="file-name">${audioData.name}</span>
                 <span class="file-duration">[${formatTime(audioData.duration)}]</span>
             </div>
             <div class="file-actions">
@@ -119,16 +160,22 @@ function selectFile(index) {
     // Reset trim values
     state.trimStart = 0;
     state.trimEnd = state.audioBuffer.duration;
+    state.currentCursorTime = 0;
     
     // Update UI
     document.getElementById('trimStartInput').value = 0;
     document.getElementById('trimStartInput').max = state.audioBuffer.duration;
-    document.getElementById('trimEndInput').value = state.audioBuffer.duration.toFixed(2);
+    document.getElementById('trimEndInput').value = state.audioBuffer.duration.toFixed(3);
     document.getElementById('trimEndInput').max = state.audioBuffer.duration;
     document.getElementById('totalTime').textContent = formatTime(state.audioBuffer.duration);
     
-    document.getElementById('selectedFileInfo').textContent = `📝 EDITING: ${state.currentFile.name}`;
+    document.getElementById('selectedFileInfo').textContent = `EDITING: ${state.currentFile.name} | Duration: ${formatTime(state.audioBuffer.duration)} | Sample Rate: ${state.audioBuffer.sampleRate}Hz | Channels: ${state.audioBuffer.numberOfChannels}`;
     document.getElementById('editorSection').style.display = 'block';
+    
+    // Set up native audio player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(state.audioBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
     
     updateFilesList();
     drawWaveform();
@@ -168,10 +215,15 @@ function drawWaveform() {
     const step = Math.ceil(data.length / canvas.width);
     const amp = canvas.height / 2;
     
-    ctx.fillStyle = 'rgba(0, 10, 0, 1)';
+    // Determine colors based on theme
+    const isLightMode = document.body.classList.contains('light-mode');
+    const bgColor = isLightMode ? 'rgba(255, 255, 255, 1)' : 'rgba(0, 10, 0, 1)';
+    const waveColor = isLightMode ? '#333333' : '#00ff00';
+    
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    ctx.strokeStyle = '#00ff00';
+    ctx.strokeStyle = waveColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     
@@ -195,9 +247,55 @@ function drawWaveform() {
     const trimStartX = (state.trimStart / state.audioBuffer.duration) * canvas.width;
     const trimEndX = (state.trimEnd / state.audioBuffer.duration) * canvas.width;
     
+    // Draw trim region overlay
+    ctx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+    ctx.fillRect(0, 0, trimStartX, canvas.height);
+    ctx.fillRect(trimEndX, 0, canvas.width - trimEndX, canvas.height);
+    
     // Update trim handles
     document.getElementById('trimStart').style.left = trimStartX + 'px';
     document.getElementById('trimEnd').style.left = trimEndX + 'px';
+}
+
+function seekToPosition(event) {
+    if (!state.audioBuffer) return;
+    
+    const canvas = document.getElementById('waveformCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const ratio = x / canvas.width;
+    
+    state.currentCursorTime = ratio * state.audioBuffer.duration;
+    state.pauseTime = state.currentCursorTime;
+    
+    // Update time display
+    document.getElementById('currentTime').textContent = formatTime(state.currentCursorTime);
+    
+    // If playing, stop and restart from new position
+    if (state.isPlaying) {
+        stopAudio();
+        playAudio();
+    }
+}
+
+function handleTrimDrag(event) {
+    if (!state.audioBuffer) return;
+    
+    const canvas = document.getElementById('waveformCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / canvas.width));
+    const time = ratio * state.audioBuffer.duration;
+    
+    if (state.isDraggingTrimStart) {
+        state.trimStart = Math.max(0, Math.min(time, state.trimEnd - 0.1));
+        document.getElementById('trimStartInput').value = state.trimStart.toFixed(3);
+        drawWaveform();
+    } else if (state.isDraggingTrimEnd) {
+        state.trimEnd = Math.min(state.audioBuffer.duration, Math.max(time, state.trimStart + 0.1));
+        document.getElementById('trimEndInput').value = state.trimEnd.toFixed(3);
+        drawWaveform();
+    }
 }
 
 // Playback Controls
@@ -218,11 +316,11 @@ function playAudio() {
     state.sourceNode.connect(state.gainNode);
     state.gainNode.connect(state.audioContext.destination);
     
-    const offset = state.pauseTime || state.trimStart;
+    const offset = state.pauseTime || state.currentCursorTime || state.trimStart;
     const duration = state.trimEnd - offset;
     
     state.sourceNode.start(0, offset, duration);
-    state.startTime = state.audioContext.currentTime - (state.pauseTime || 0);
+    state.startTime = state.audioContext.currentTime - (state.pauseTime || state.currentCursorTime || 0);
     state.isPlaying = true;
     
     state.sourceNode.onended = () => {
@@ -238,6 +336,7 @@ function pauseAudio() {
     if (!state.isPlaying) return;
     
     state.pauseTime = state.audioContext.currentTime - state.startTime;
+    state.currentCursorTime = state.pauseTime;
     stopAudio();
 }
 
@@ -254,18 +353,33 @@ function stopAudio() {
     state.isPlaying = false;
     state.pauseTime = 0;
     updateTimeDisplay();
+    updateTimeCursor();
 }
 
 function updateTimeDisplay() {
     if (state.isPlaying) {
-        const currentTime = state.audioContext.currentTime - state.startTime + state.trimStart;
+        const currentTime = state.audioContext.currentTime - state.startTime + (state.currentCursorTime || state.trimStart);
         const displayTime = Math.min(currentTime, state.trimEnd);
         document.getElementById('currentTime').textContent = formatTime(displayTime);
+        state.currentCursorTime = displayTime;
+        updateTimeCursor();
         requestAnimationFrame(updateTimeDisplay);
     } else {
-        const displayTime = state.pauseTime + state.trimStart;
+        const displayTime = state.pauseTime || state.currentCursorTime || state.trimStart;
         document.getElementById('currentTime').textContent = formatTime(displayTime);
+        updateTimeCursor();
     }
+}
+
+function updateTimeCursor() {
+    if (!state.audioBuffer) return;
+    
+    const canvas = document.getElementById('waveformCanvas');
+    const cursor = document.getElementById('timeCursor');
+    const cursorX = (state.currentCursorTime / state.audioBuffer.duration) * canvas.width;
+    
+    cursor.style.left = cursorX + 'px';
+    cursor.classList.add('visible');
 }
 
 // Edit Controls
@@ -281,14 +395,14 @@ function updateVolume(event) {
 function updateTrimStart(event) {
     const value = parseFloat(event.target.value);
     state.trimStart = Math.max(0, Math.min(value, state.trimEnd - 0.1));
-    event.target.value = state.trimStart.toFixed(2);
+    event.target.value = state.trimStart.toFixed(3);
     drawWaveform();
 }
 
 function updateTrimEnd(event) {
     const value = parseFloat(event.target.value);
     state.trimEnd = Math.min(state.audioBuffer.duration, Math.max(value, state.trimStart + 0.1));
-    event.target.value = state.trimEnd.toFixed(2);
+    event.target.value = state.trimEnd.toFixed(3);
     drawWaveform();
 }
 
@@ -316,11 +430,16 @@ async function reverseAudio() {
     state.audioBuffer = reversedBuffer;
     state.currentFile.buffer = reversedBuffer;
     state.trimEnd = state.audioBuffer.duration;
-    document.getElementById('trimEndInput').value = state.trimEnd.toFixed(2);
+    document.getElementById('trimEndInput').value = state.trimEnd.toFixed(3);
     document.getElementById('totalTime').textContent = formatTime(state.audioBuffer.duration);
     
+    // Update native player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(reversedBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
+    
     drawWaveform();
-    alert('✓ AUDIO REVERSED');
+    alert('AUDIO REVERSED');
 }
 
 async function applyTrim() {
@@ -349,17 +468,215 @@ async function applyTrim() {
     
     state.audioBuffer = trimmedBuffer;
     state.currentFile.buffer = trimmedBuffer;
+    state.currentFile.duration = trimmedBuffer.duration;
     state.trimStart = 0;
     state.trimEnd = trimmedBuffer.duration;
     
     document.getElementById('trimStartInput').value = 0;
     document.getElementById('trimStartInput').max = trimmedBuffer.duration;
-    document.getElementById('trimEndInput').value = trimmedBuffer.duration.toFixed(2);
+    document.getElementById('trimEndInput').value = trimmedBuffer.duration.toFixed(3);
     document.getElementById('trimEndInput').max = trimmedBuffer.duration;
     document.getElementById('totalTime').textContent = formatTime(trimmedBuffer.duration);
     
+    // Update native player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(trimmedBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
+    
+    updateFilesList();
     drawWaveform();
-    alert('✓ TRIM APPLIED');
+    alert(`TRIM APPLIED | New Duration: ${formatTime(trimmedBuffer.duration)} | Trimmed from ${formatTime(state.trimStart)} to ${formatTime(state.trimEnd)}`);
+}
+
+async function splitAtCursor() {
+    if (!state.audioBuffer) return;
+    
+    stopAudio();
+    
+    const splitTime = state.currentCursorTime;
+    if (splitTime <= 0 || splitTime >= state.audioBuffer.duration) {
+        alert('Invalid cursor position for splitting');
+        return;
+    }
+    
+    const splitSample = Math.floor(splitTime * state.audioBuffer.sampleRate);
+    
+    // Create first part
+    const buffer1 = state.audioContext.createBuffer(
+        state.audioBuffer.numberOfChannels,
+        splitSample,
+        state.audioBuffer.sampleRate
+    );
+    
+    // Create second part
+    const buffer2 = state.audioContext.createBuffer(
+        state.audioBuffer.numberOfChannels,
+        state.audioBuffer.length - splitSample,
+        state.audioBuffer.sampleRate
+    );
+    
+    for (let channel = 0; channel < state.audioBuffer.numberOfChannels; channel++) {
+        const sourceData = state.audioBuffer.getChannelData(channel);
+        const data1 = buffer1.getChannelData(channel);
+        const data2 = buffer2.getChannelData(channel);
+        
+        for (let i = 0; i < splitSample; i++) {
+            data1[i] = sourceData[i];
+        }
+        
+        for (let i = 0; i < buffer2.length; i++) {
+            data2[i] = sourceData[splitSample + i];
+        }
+    }
+    
+    // Add both parts as new files
+    const baseName = state.currentFile.name.replace(/\.[^/.]+$/, '');
+    
+    state.audioFiles.push({
+        file: null,
+        name: baseName + '_part1.wav',
+        duration: buffer1.duration,
+        buffer: buffer1
+    });
+    
+    state.audioFiles.push({
+        file: null,
+        name: baseName + '_part2.wav',
+        duration: buffer2.duration,
+        buffer: buffer2
+    });
+    
+    updateFilesList();
+    alert(`SPLIT COMPLETE | Part 1: ${formatTime(buffer1.duration)} | Part 2: ${formatTime(buffer2.duration)}`);
+}
+
+async function applyFadeIn() {
+    if (!state.audioBuffer) return;
+    
+    stopAudio();
+    
+    const fadeDuration = Math.min(2.0, state.audioBuffer.duration / 4); // 2 seconds or 25% of duration
+    const fadeSamples = Math.floor(fadeDuration * state.audioBuffer.sampleRate);
+    
+    const fadedBuffer = state.audioContext.createBuffer(
+        state.audioBuffer.numberOfChannels,
+        state.audioBuffer.length,
+        state.audioBuffer.sampleRate
+    );
+    
+    for (let channel = 0; channel < state.audioBuffer.numberOfChannels; channel++) {
+        const sourceData = state.audioBuffer.getChannelData(channel);
+        const destData = fadedBuffer.getChannelData(channel);
+        
+        for (let i = 0; i < state.audioBuffer.length; i++) {
+            if (i < fadeSamples) {
+                const gain = i / fadeSamples;
+                destData[i] = sourceData[i] * gain;
+            } else {
+                destData[i] = sourceData[i];
+            }
+        }
+    }
+    
+    state.audioBuffer = fadedBuffer;
+    state.currentFile.buffer = fadedBuffer;
+    
+    // Update native player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(fadedBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
+    
+    drawWaveform();
+    alert(`FADE IN APPLIED | Duration: ${formatTime(fadeDuration)}`);
+}
+
+async function applyFadeOut() {
+    if (!state.audioBuffer) return;
+    
+    stopAudio();
+    
+    const fadeDuration = Math.min(2.0, state.audioBuffer.duration / 4); // 2 seconds or 25% of duration
+    const fadeSamples = Math.floor(fadeDuration * state.audioBuffer.sampleRate);
+    const fadeStartSample = state.audioBuffer.length - fadeSamples;
+    
+    const fadedBuffer = state.audioContext.createBuffer(
+        state.audioBuffer.numberOfChannels,
+        state.audioBuffer.length,
+        state.audioBuffer.sampleRate
+    );
+    
+    for (let channel = 0; channel < state.audioBuffer.numberOfChannels; channel++) {
+        const sourceData = state.audioBuffer.getChannelData(channel);
+        const destData = fadedBuffer.getChannelData(channel);
+        
+        for (let i = 0; i < state.audioBuffer.length; i++) {
+            if (i >= fadeStartSample) {
+                const gain = 1 - ((i - fadeStartSample) / fadeSamples);
+                destData[i] = sourceData[i] * gain;
+            } else {
+                destData[i] = sourceData[i];
+            }
+        }
+    }
+    
+    state.audioBuffer = fadedBuffer;
+    state.currentFile.buffer = fadedBuffer;
+    
+    // Update native player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(fadedBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
+    
+    drawWaveform();
+    alert(`FADE OUT APPLIED | Duration: ${formatTime(fadeDuration)}`);
+}
+
+async function normalizeAudio() {
+    if (!state.audioBuffer) return;
+    
+    stopAudio();
+    
+    // Find peak amplitude
+    let peak = 0;
+    for (let channel = 0; channel < state.audioBuffer.numberOfChannels; channel++) {
+        const channelData = state.audioBuffer.getChannelData(channel);
+        for (let i = 0; i < channelData.length; i++) {
+            peak = Math.max(peak, Math.abs(channelData[i]));
+        }
+    }
+    
+    if (peak === 0) {
+        alert('Cannot normalize silent audio');
+        return;
+    }
+    
+    const gain = 0.95 / peak; // Normalize to 95% to avoid clipping
+    
+    const normalizedBuffer = state.audioContext.createBuffer(
+        state.audioBuffer.numberOfChannels,
+        state.audioBuffer.length,
+        state.audioBuffer.sampleRate
+    );
+    
+    for (let channel = 0; channel < state.audioBuffer.numberOfChannels; channel++) {
+        const sourceData = state.audioBuffer.getChannelData(channel);
+        const destData = normalizedBuffer.getChannelData(channel);
+        
+        for (let i = 0; i < sourceData.length; i++) {
+            destData[i] = sourceData[i] * gain;
+        }
+    }
+    
+    state.audioBuffer = normalizedBuffer;
+    state.currentFile.buffer = normalizedBuffer;
+    
+    // Update native player
+    const nativePlayer = document.getElementById('nativeAudioPlayer');
+    const blob = new Blob([audioBufferToWav(normalizedBuffer)], { type: 'audio/wav' });
+    nativePlayer.src = URL.createObjectURL(blob);
+    
+    drawWaveform();
+    alert(`NORMALIZED | Peak: ${(peak * 100).toFixed(1)}% | Gain Applied: ${(gain * 100).toFixed(1)}%`);
 }
 
 async function combineAudioFiles() {
@@ -410,7 +727,7 @@ async function combineAudioFiles() {
     updateFilesList();
     selectFile(state.audioFiles.length - 1);
     
-    alert('✓ FILES COMBINED');
+    alert(`FILES COMBINED | Total Duration: ${formatTime(combinedBuffer.duration)} | ${state.audioFiles.length - 1} files combined`);
 }
 
 // Download Functions
@@ -445,7 +762,7 @@ async function downloadAudio() {
     a.click();
     
     URL.revokeObjectURL(url);
-    alert('✓ DOWNLOAD STARTED');
+    alert(`DOWNLOAD STARTED | File: ${a.download} | Duration: ${formatTime(adjustedBuffer.duration)}`);
 }
 
 async function batchDownload() {
@@ -465,14 +782,15 @@ async function batchDownload() {
         await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    alert('✓ BATCH DOWNLOAD STARTED');
+    alert(`BATCH DOWNLOAD COMPLETE | ${state.audioFiles.length} files downloaded`);
 }
 
 // Utility Functions
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const ms = Math.floor((seconds % 1) * 1000);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 }
 
 function audioBufferToWav(buffer) {
